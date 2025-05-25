@@ -1,0 +1,8 @@
+backlog.md
+depgraph.svg
+REFACTORING_PLAN.md
+
+# Build artifacts
+memov2
+*.test
+*.out
