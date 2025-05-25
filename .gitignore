@@ -1,0 +1,13 @@
+backlog.md
+depgraph.svg
+REFACTORING_PLAN.md
+
+# Kiro and Cursor directories
+.kiro/
+.cursor/
+AGENTS.md
+
+# Build artifacts
+memov2
+*.test
+*.out
