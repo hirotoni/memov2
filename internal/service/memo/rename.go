@@ -13,7 +13,10 @@ func (uc memo) Rename(path string, newTitle string) error {
 	memosDir := uc.config.MemosDir()
 
 	// Resolve path
-	path = resolveToMemosDir(memosDir, path)
+	path, err := resolveToMemosDir(memosDir, path)
+	if err != nil {
+		return err
+	}
 
 	// Extract filename and category from path
 	fileName := filepath.Base(path)
