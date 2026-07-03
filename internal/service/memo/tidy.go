@@ -89,6 +89,13 @@ func (uc memo) moveFilesIfNeeded(sourcePath string, info os.FileInfo) error {
 	}
 
 	category := loadedMemo.CategoryTree()
+	if err := domain.ValidateCategoryTree(category); err != nil {
+		// Skip files with an invalid category rather than aborting the whole
+		// tidy pass or moving the file to an unintended (possibly outside
+		// MemosDir) location.
+		uc.logger.Warn("Skipping memo with invalid category", "path", sourcePath, "error", err)
+		return nil
+	}
 	targetPath := filepath.Join(uc.config.MemosDir(), filepath.Join(category...), info.Name())
 
 	if sourcePath != targetPath {
@@ -187,4 +194,3 @@ func extractTitleFromMemoFilename(filename string) string {
 	title = strings.TrimSuffix(title, ".md")
 	return title
 }
-

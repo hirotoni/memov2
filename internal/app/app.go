@@ -27,13 +27,15 @@ func NewApp(cfg *toml.Config, logger *slog.Logger) (*App, error) {
 	}
 
 	// Initialize services
-	configProvider := toml.NewProvider(cfg)
-	editor := platform.NewEditor(cfg.Editor(), cfg.EditorArgs())
-	ucs := service.NewServices(configProvider, editor, logger)
+	var (
+		configProvider = toml.NewProvider(cfg)
+		editor         = platform.NewEditor(cfg.Editor(), cfg.EditorArgs())
+		services       = service.NewServices(configProvider, editor, logger)
+	)
 
 	app := &App{
 		config:   configProvider,
-		services: ucs,
+		services: services,
 		logger:   logger,
 	}
 

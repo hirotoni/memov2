@@ -155,6 +155,10 @@ func memofilefromosfileinfo(path string, info os.FileInfo, logger *slog.Logger) 
 }
 
 func (r *memo) Metadata(f interfaces.MemoFileInterface) (map[string]interface{}, error) {
+	if err := domain.ValidateCategoryTree(f.CategoryTree()); err != nil {
+		return nil, common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
+	}
+
 	fpath := filepath.Join(r.dir, filepath.Join(f.CategoryTree()...), f.FileName())
 
 	b, err := repoCommon.ReadMarkdownFile(fpath)
@@ -169,6 +173,10 @@ func (r *memo) Metadata(f interfaces.MemoFileInterface) (map[string]interface{},
 }
 
 func (r *memo) Save(file interfaces.MemoFileInterface, truncate bool) error {
+	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
+	}
+
 	// initialize location
 	locationPath := filepath.Join(r.dir, file.Location())
 	if err := platform.EnsureDir(locationPath); err != nil {
@@ -189,7 +197,6 @@ func (r *memo) Save(file interfaces.MemoFileInterface, truncate bool) error {
 
 	return nil
 }
-
 
 type CategoryCollector struct {
 	memorepo      interfaces.MemoRepo
@@ -305,6 +312,19 @@ func (r *memo) Categories() ([][]string, error) {
 }
 
 func (r *memo) Move(file interfaces.MemoFileInterface, newCategoryTree []string) error {
+	// Validate the file's existing category tree too: it may originate from
+	// hand-edited frontmatter, and file.Location() (used below to build
+	// currentPath, which is later passed to os.Remove) is derived directly
+	// from it. Without this check an invalid current category could point
+	// currentPath outside MemosDir(), and a valid newCategoryTree would let
+	// os.Remove delete a file living outside the memos directory.
+	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid current category tree")
+	}
+	if err := domain.ValidateCategoryTree(newCategoryTree); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid new category tree")
+	}
+
 	// Get current file path
 	currentPath := filepath.Join(r.dir, file.Location(), file.FileName())
 
@@ -345,6 +365,15 @@ func (r *memo) Move(file interfaces.MemoFileInterface, newCategoryTree []string)
 }
 
 func (r *memo) Delete(file interfaces.MemoFileInterface) error {
+	// Validate the category tree before it is used to build filePath below,
+	// which is passed to platform.MoveToTrash (os.Rename). An invalid
+	// category (e.g. from hand-edited frontmatter) could otherwise resolve
+	// filePath outside MemosDir() and cause a file outside the memos
+	// directory to be moved to trash.
+	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid current category tree")
+	}
+
 	// Get file path
 	filePath := filepath.Join(r.dir, file.Location(), file.FileName())
 

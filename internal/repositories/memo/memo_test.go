@@ -1,6 +1,7 @@
 package memo
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hirotoni/memov2/internal/common"
 	"github.com/hirotoni/memov2/internal/domain"
 	"github.com/hirotoni/memov2/internal/domain/markdown"
 )
@@ -520,6 +522,207 @@ func TestMove_FileNotExist(t *testing.T) {
 	// Assert
 	if err == nil {
 		t.Error("expected error when moving non-existent file")
+	}
+}
+
+func TestSave_InvalidCategoryTree(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repo := NewMemo(tmpDir, logger)
+
+	memo := createTestMemo(t, "Bad Category", []string{".."}, nil)
+
+	// Execute
+	err := repo.Save(memo, false)
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error when saving memo with an invalid category tree")
+	}
+	var appErr *common.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+	}
+	if appErr.Type != common.ErrorTypeValidation {
+		t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+	}
+
+	// Nothing should have been written anywhere under tmpDir.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to read tmpDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected no files to be written, found %d entries", len(entries))
+	}
+}
+
+func TestMetadata_InvalidCategoryTree(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repo := NewMemo(tmpDir, logger)
+
+	memo := createTestMemo(t, "Bad Category", []string{".."}, nil)
+
+	// Execute
+	metadata, err := repo.Metadata(memo)
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error when getting metadata for a memo with an invalid category tree")
+	}
+	if metadata != nil {
+		t.Errorf("expected nil metadata, got %v", metadata)
+	}
+	var appErr *common.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+	}
+	if appErr.Type != common.ErrorTypeValidation {
+		t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+	}
+}
+
+func TestMove_InvalidCategoryTree(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repo := NewMemo(tmpDir, logger)
+
+	memo := createTestMemo(t, "Move Bad Category", []string{"category1"}, nil)
+	if err := repo.Save(memo, false); err != nil {
+		t.Fatalf("failed to save memo: %v", err)
+	}
+	oldPath := filepath.Join(tmpDir, memo.Location(), memo.FileName())
+
+	// Execute - attempt to move to an invalid category tree
+	err := repo.Move(memo, []string{".."})
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error when moving memo to an invalid category tree")
+	}
+	var appErr *common.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+	}
+	if appErr.Type != common.ErrorTypeValidation {
+		t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+	}
+
+	// The original file must remain untouched.
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		t.Errorf("expected file to remain at original path %s", oldPath)
+	}
+}
+
+// TestMove_InvalidCurrentCategoryTree proves the fix for the P0 finding:
+// Move() must validate file.CategoryTree() (the memo's EXISTING/current
+// category, as opposed to the new target category) before it is used to
+// build currentPath, which is later passed to os.Remove.
+//
+// To reproduce the leak realistically, the repo root here is nested inside
+// an outer temp dir (mirroring MemosDir() living inside some parent
+// directory). The memo's CategoryTree() is set to [".."], simulating a
+// hand-edited frontmatter category that resolves outside the repo root, and
+// a real file is placed at exactly the path that Location() computes -
+// i.e. outside the repo root, directly in the outer temp dir - so the test
+// can prove it is left untouched.
+func TestMove_InvalidCurrentCategoryTree(t *testing.T) {
+	// Setup
+	outerDir := t.TempDir()
+	memosDir := filepath.Join(outerDir, "memos")
+	if err := os.MkdirAll(memosDir, 0o755); err != nil {
+		t.Fatalf("failed to create memos dir: %v", err)
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repo := NewMemo(memosDir, logger)
+
+	// A memo whose parsed CategoryTree() is invalid ("..") but whose file
+	// physically exists on disk at the location that Location() computes -
+	// which, because of the invalid category, sits outside memosDir.
+	badMemo := createTestMemo(t, "Escaped Memo", []string{".."}, nil)
+	escapedPath := filepath.Join(memosDir, badMemo.Location(), badMemo.FileName())
+	if !strings.HasPrefix(filepath.Dir(escapedPath), outerDir) || strings.HasPrefix(filepath.Dir(escapedPath), memosDir) {
+		t.Fatalf("test setup invariant broken: expected escapedPath %s to sit outside memosDir %s", escapedPath, memosDir)
+	}
+	if err := os.WriteFile(escapedPath, []byte(badMemo.ContentString()), 0o644); err != nil {
+		t.Fatalf("failed to write escaped memo file: %v", err)
+	}
+
+	// Execute - attempt to move to a perfectly valid new category.
+	err := repo.Move(badMemo, []string{"work"})
+
+	// Assert: rejected with a validation error.
+	if err == nil {
+		t.Fatal("expected error when moving a memo with an invalid current category tree")
+	}
+	var appErr *common.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+	}
+	if appErr.Type != common.ErrorTypeValidation {
+		t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+	}
+
+	// The file outside memosDir must NOT have been removed.
+	if _, err := os.Stat(escapedPath); os.IsNotExist(err) {
+		t.Errorf("expected file to remain at %s (outside memosDir), but it was removed", escapedPath)
+	}
+
+	// Nothing should have been written at the would-be new location either.
+	newPath := filepath.Join(memosDir, "work", badMemo.FileName())
+	if _, err := os.Stat(newPath); !os.IsNotExist(err) {
+		t.Errorf("expected no file to be written at new path %s", newPath)
+	}
+}
+
+// TestDelete_InvalidCurrentCategoryTree proves the fix for the P1 finding:
+// Delete() must validate file.CategoryTree() before it is used to build
+// filePath, which is later passed to platform.MoveToTrash (os.Rename).
+func TestDelete_InvalidCurrentCategoryTree(t *testing.T) {
+	// Setup
+	outerDir := t.TempDir()
+	memosDir := filepath.Join(outerDir, "memos")
+	if err := os.MkdirAll(memosDir, 0o755); err != nil {
+		t.Fatalf("failed to create memos dir: %v", err)
+	}
+	testTrashDir := filepath.Join(outerDir, ".trash")
+	os.Setenv("TEST_TRASH_DIR", testTrashDir)
+	defer os.Unsetenv("TEST_TRASH_DIR")
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repo := NewMemo(memosDir, logger)
+
+	// A memo whose parsed CategoryTree() is invalid ("..") but whose file
+	// physically exists on disk at the location that Location() computes -
+	// which, because of the invalid category, sits outside memosDir.
+	badMemo := createTestMemo(t, "Escaped Memo", []string{".."}, nil)
+	escapedPath := filepath.Join(memosDir, badMemo.Location(), badMemo.FileName())
+	if err := os.WriteFile(escapedPath, []byte(badMemo.ContentString()), 0o644); err != nil {
+		t.Fatalf("failed to write escaped memo file: %v", err)
+	}
+
+	// Execute
+	err := repo.Delete(badMemo)
+
+	// Assert: rejected with a validation error.
+	if err == nil {
+		t.Fatal("expected error when deleting a memo with an invalid current category tree")
+	}
+	var appErr *common.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+	}
+	if appErr.Type != common.ErrorTypeValidation {
+		t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+	}
+
+	// The file outside memosDir must NOT have been moved to trash.
+	if _, err := os.Stat(escapedPath); os.IsNotExist(err) {
+		t.Errorf("expected file to remain at %s (outside memosDir), but it was moved", escapedPath)
 	}
 }
 
