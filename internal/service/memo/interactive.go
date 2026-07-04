@@ -48,7 +48,10 @@ func (uc memo) RenameInteractive() error {
 	if !ok {
 		return nil // cancelled
 	}
-	return uc.Rename(relPath, newTitle)
+	// Use renameMemo (not Rename) so the interactive TUI path stays silent on
+	// stdout — the non-interactive CLI path is the only one that emits output.
+	_, err = uc.renameMemo(relPath, newTitle)
+	return err
 }
 
 // NewInteractive lets the user pick a category and enter a title in a TUI, then

@@ -6,7 +6,20 @@ import (
 	"strings"
 
 	"github.com/hirotoni/memov2/internal/common"
+	"github.com/hirotoni/memov2/internal/domain"
 )
+
+// validateAndTrimTitle is the single gate for untrusted memo titles used by both
+// the non-interactive create and rename paths. It rejects unsafe titles (empty,
+// ".", "..", or containing a path separator) with an ErrorTypeValidation error so
+// they can never reach domain.FileName() and escape MemosDir, and returns the
+// leading/trailing-trimmed title that should actually be stored.
+func validateAndTrimTitle(title string) (string, error) {
+	if err := domain.ValidateMemoTitle(title); err != nil {
+		return "", common.Wrap(err, common.ErrorTypeValidation, "invalid memo title")
+	}
+	return strings.TrimSpace(title), nil
+}
 
 // resolveToMemosDir resolves a user-provided path to an absolute path under memosDir.
 // It handles three cases:

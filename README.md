@@ -103,9 +103,14 @@ memov2 config edit
 
 ## AI / automation
 
-The read-only data commands support a `--json` flag that writes a single valid
-JSON value to **stdout only** (logs and errors stay on stderr), so output can be
-piped straight to `jq` or consumed by an AI agent or script:
+memov2 exposes a non-interactive surface for AI agents and scripts. Every
+command below writes its data to **stdout only** (logs and errors stay on
+stderr) and never opens a TUI or the editor, so output can be piped straight to
+`jq`. The read commands take a `--json` flag; the write commands (`memos create`,
+`memos rename <path> <title>`) print the target memo's relative path by default,
+or a JSON object with `--json`.
+
+### Read commands
 
 | Command | Without `--json` | With `--json` |
 | --- | --- | --- |
@@ -115,18 +120,30 @@ piped straight to `jq` or consumed by an AI agent or script:
 | `memos search <query>` | `title<TAB>path` per matched memo | array of `{ title, path, category, matches[] }` |
 | `config show` | structured log lines | `{ base_dir, todos_dir, memos_dir, todos_days_to_seek }` |
 
+### Write commands
+
+| Command | Without `--json` | With `--json` |
+| --- | --- | --- |
+| `memos create --title <t> [--category a/b/c]` | new memo's relative path (one line) | `{ title, path, category, date }` |
+| `memos rename <path> <new-title>` | new relative path (one line) | `{ path, old_title, new_title, new_path }` |
+
 Notes:
 
-- These commands are strictly read-only and non-interactive (they never open a TUI or prompt for input).
-- `memos search` with **no** query still launches the interactive TUI; pass a query argument for non-interactive output.
-- `memos show` resolves its path under the memos directory; a path that escapes it (e.g. `../../etc/passwd`) is rejected with a non-zero exit and nothing on stdout.
+- `memos create` reads the memo **body from stdin**. If stdin is a terminal or empty, the memo is created with no body (the command never blocks). Title is required; an empty title exits non-zero with nothing on stdout.
+- `memos rename` with **no** arguments launches the interactive TUI; pass `<path> <new-title>` for non-interactive renaming. `memos search` with no query behaves the same way.
+- Paths resolve under the memos directory; a path that escapes it (e.g. `../../etc/passwd`) is rejected with a non-zero exit and nothing on stdout.
 - `<path>` is relative to the memos directory (as printed by `memos list --short`) or absolute.
 
 ```bash
-# Examples
+# Read examples
 memov2 memos list --json | jq '.[].title'
 memov2 memos search 会議 --json | jq '.[] | {title, matches: (.matches | length)}'
 memov2 memos show "$(memov2 memos list --short --json | jq -r '.[0].path')" --json | jq .top_level_content
+
+# Write examples
+echo "# meeting notes" | memov2 memos create --title "Standup" --category work/daily
+printf 'body from stdin' | memov2 memos create --title "Idea" --json | jq -r .path
+memov2 memos rename "$(memov2 memos list --short --json | jq -r '.[0].path')" "Renamed" --json
 ```
 
 ## Configuration

@@ -63,6 +63,30 @@ func (f *MemoFile) Location() string {
 	return strings.Join(f.categoryTree, string(filepath.Separator))
 }
 
+// ValidateMemoTitle checks that a memo title is safe to use when building the
+// on-disk filename via FileName(). Titles come from untrusted AI/automation input
+// (`memos create --title`, `memos rename <new-title>`), and FileName() only
+// substitutes spaces — it never rejects path separators or traversal segments.
+// A title like "../../pwned" would therefore escape MemosDir. Such titles must be
+// rejected outright rather than silently sanitized, mirroring ValidateCategoryTree.
+//
+// A title is invalid if it is empty or whitespace-only, is "." or "..", or
+// contains a path separator ("/" or "\"). Comparison is done on the
+// leading/trailing-trimmed title, which is what FileName() ultimately encodes.
+func ValidateMemoTitle(title string) error {
+	trimmed := strings.TrimSpace(title)
+	if trimmed == "" {
+		return errors.New("invalid memo title: title is empty")
+	}
+	if trimmed == "." || trimmed == ".." {
+		return fmt.Errorf("invalid memo title %q: title must not be %q", trimmed, trimmed)
+	}
+	if strings.ContainsAny(trimmed, "/\\") {
+		return fmt.Errorf("invalid memo title %q: title must not contain a path separator", trimmed)
+	}
+	return nil
+}
+
 func MemoTitle(filename string) string {
 	re := regexp.MustCompile(FileNameExtractRegexMemo)
 	matches := re.FindStringSubmatch(filename)

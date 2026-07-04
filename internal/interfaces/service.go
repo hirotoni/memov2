@@ -11,6 +11,7 @@ type Services interface {
 type MemoService interface {
 	BuildWeeklyReportMemos() error
 	GenerateMemoFile(title string, categoryTree []string) error
+	CreateNonInteractive(title string, categoryTree []string, body string, asJSON bool) error
 	ListCategories(asJSON bool) error
 	GenerateMemoIndex() error
 	Browse() error
@@ -18,7 +19,7 @@ type MemoService interface {
 	Show(path string, asJSON bool) error
 	Search(query string, asJSON bool) error
 	Open(path string) error
-	Rename(path string, newTitle string) error
+	Rename(path string, newTitle string, asJSON bool) error
 	TidyMemos() error
 
 	// Interactive embedded-TUI commands (memos search/rename/new).

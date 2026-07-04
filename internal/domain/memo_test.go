@@ -304,3 +304,33 @@ context 2
 		})
 	}
 }
+
+func TestValidateMemoTitle(t *testing.T) {
+	testCases := []struct {
+		name    string
+		title   string
+		wantErr bool
+	}{
+		{name: "normal title is valid", title: "My Note", wantErr: false},
+		{name: "title with padding is valid (trimmed)", title: "  My Note  ", wantErr: false},
+		{name: "empty title is invalid", title: "", wantErr: true},
+		{name: "whitespace-only title is invalid", title: "   ", wantErr: true},
+		{name: "dot title is invalid", title: ".", wantErr: true},
+		{name: "dot-dot title is invalid", title: "..", wantErr: true},
+		{name: "forward slash title is invalid", title: "../../pwned", wantErr: true},
+		{name: "backslash title is invalid", title: "..\\pwned", wantErr: true},
+		{name: "embedded slash title is invalid", title: "a/b", wantErr: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateMemoTitle(tc.title)
+			if tc.wantErr && err == nil {
+				t.Errorf("expected an error for title %q, got nil", tc.title)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("expected no error for title %q, got %v", tc.title, err)
+			}
+		})
+	}
+}

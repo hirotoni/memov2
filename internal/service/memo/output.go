@@ -8,10 +8,11 @@ import (
 )
 
 // This file defines the JSON DTOs used by the machine-readable (--json) output of
-// the read-only memo commands. Domain types are intentionally NOT marshalled
-// directly: these DTOs form a stable, documented contract for AI/automation
-// consumers. Fields may be added in a backward-compatible way, but existing
-// fields and json tags must not change meaning.
+// the read-only memo commands AND the non-interactive write commands
+// (`memos create`, `memos rename <path> <title>`). Domain types are intentionally
+// NOT marshalled directly: these DTOs form a stable, documented contract for
+// AI/automation consumers. Fields may be added in a backward-compatible way, but
+// existing fields and json tags must not change meaning.
 
 // listItemDTO is one memo in `memos list --json`.
 type listItemDTO struct {
@@ -59,6 +60,25 @@ type searchItemDTO struct {
 	Path     string           `json:"path"`
 	Category []string         `json:"category"`
 	Matches  []searchMatchDTO `json:"matches"`
+}
+
+// createResultDTO is emitted by `memos create --json`. It reports where the new
+// memo was written. Field names match the read DTOs (title/path/category/date).
+type createResultDTO struct {
+	Title    string    `json:"title"`
+	Path     string    `json:"path"`
+	Category []string  `json:"category"`
+	Date     time.Time `json:"date"`
+}
+
+// renameResultDTO is emitted by `memos rename <path> <title> --json`. It reports
+// the old and new titles together with the old (path) and new (new_path) relative
+// paths of the renamed memo.
+type renameResultDTO struct {
+	Path     string `json:"path"`
+	OldTitle string `json:"old_title"`
+	NewTitle string `json:"new_title"`
+	NewPath  string `json:"new_path"`
 }
 
 // categoryTree normalizes a memo's category tree so it always marshals to a JSON
