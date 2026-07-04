@@ -31,7 +31,11 @@ type MemoService interface {
 // TodoService defines the interface for todo service operations
 type TodoService interface {
 	GenerateTodoFile(truncate bool) error
+	GenerateTodoFileNonInteractive(truncate, asJSON bool) error
 	BuildWeeklyReportTodos() error
+	BuildWeeklyReportTodosNonInteractive(asJSON bool) error
+	List(showFullPath, asJSON bool) error
+	Show(path string, asJSON bool) error
 }
 
 // ConfigService defines the interface for config service operations

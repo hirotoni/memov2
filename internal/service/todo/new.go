@@ -12,16 +12,30 @@ import (
 	"github.com/hirotoni/memov2/internal/utils"
 )
 
-func (uc todo) GenerateTodoFile(truncate bool) error {
+// generateTodoFile builds today's todo file (inheriting from previous days) and
+// persists it, WITHOUT launching the editor. It returns the domain file so
+// callers can decide what to do next (open the editor, or report its path). This
+// is the shared core of the interactive GenerateTodoFile and the non-interactive
+// GenerateTodoFileNonInteractive. Existing "today's file" semantics are preserved:
+// Save is a no-op when the file already exists unless truncate is true.
+func (uc todo) generateTodoFile(truncate bool) (domain.TodoFileInterface, error) {
 	now := time.Now()
 	repo := uc.r.Todo()
 
 	md, err := uc.inheritTodos(now, uc.c.TodosDaysToSeek())
 	if err != nil {
-		return common.Wrap(err, common.ErrorTypeService, "error inheriting todos")
+		return nil, common.Wrap(err, common.ErrorTypeService, "error inheriting todos")
 	}
 
-	err = repo.Save(md, truncate)
+	if err := repo.Save(md, truncate); err != nil {
+		return nil, err
+	}
+
+	return md, nil
+}
+
+func (uc todo) GenerateTodoFile(truncate bool) error {
+	md, err := uc.generateTodoFile(truncate)
 	if err != nil {
 		return err
 	}
@@ -32,6 +46,33 @@ func (uc todo) GenerateTodoFile(truncate bool) error {
 		return common.Wrap(err, common.ErrorTypeService, "error opening editor")
 	}
 
+	return nil
+}
+
+// GenerateTodoFileNonInteractive creates today's todo file without launching the
+// editor. It is the write counterpart of the read-only `--json` commands and backs
+// `todos create --no-open` / `todos create --json`. It keeps the existing "today's file"
+// semantics: if the file already exists it is left intact unless truncate is true,
+// and the existing file's path is still reported (this is not a collision error).
+//
+// On success it writes the todo file's TodosDir-relative path (one line) to
+// stdout, or a todoNewResultDTO when asJSON is true. Logs and errors go to stderr.
+func (uc todo) GenerateTodoFileNonInteractive(truncate, asJSON bool) error {
+	md, err := uc.generateTodoFile(truncate)
+	if err != nil {
+		return err
+	}
+
+	relPath := md.FileName()
+
+	if asJSON {
+		return writeJSON(todoNewResultDTO{
+			Date: md.Date(),
+			Path: relPath,
+		})
+	}
+
+	fmt.Fprintln(os.Stdout, relPath)
 	return nil
 }
 

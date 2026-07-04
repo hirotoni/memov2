@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newCmd represents the new command
+// TodosCmd represents the todos command
 var TodosCmd = &cobra.Command{
 	Use:   "todos",
 	Short: "commands about todos",
@@ -15,6 +15,8 @@ var TodosCmd = &cobra.Command{
 }
 
 func init() {
-	TodosCmd.AddCommand(newCmd)
+	TodosCmd.AddCommand(createCmd)
 	TodosCmd.AddCommand(weeklyCmd)
+	TodosCmd.AddCommand(listCmd)
+	TodosCmd.AddCommand(showCmd)
 }

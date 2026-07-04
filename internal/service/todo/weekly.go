@@ -2,6 +2,7 @@ package todo
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -14,18 +15,21 @@ import (
 	"github.com/hirotoni/memov2/internal/utils"
 )
 
-func (uc todo) BuildWeeklyReportTodos() error {
-	fmt.Print("Building weekly report...\n")
-
+// buildWeeklyReportTodos computes the weekly report from the daily todo files and
+// persists it, WITHOUT launching the editor. It returns the domain weekly file so
+// callers can decide what to do next (open the editor, or report its path). This
+// is the shared core of the interactive BuildWeeklyReportTodos and the
+// non-interactive BuildWeeklyReportTodosNonInteractive.
+func (uc todo) buildWeeklyReportTodos() (domain.WeeklyFileInterface, error) {
 	r := uc.r.Todo()
 
 	todos, err := r.TodoEntries()
 	if err != nil {
-		return common.Wrap(err, common.ErrorTypeService, "error fetching todo entries")
+		return nil, common.Wrap(err, common.ErrorTypeService, "error fetching todo entries")
 	}
 	dw, err := domain.NewWeekly()
 	if err != nil {
-		return common.Wrap(err, common.ErrorTypeService, "error creating weekly file")
+		return nil, common.Wrap(err, common.ErrorTypeService, "error creating weekly file")
 	}
 
 	var prevWeekNum int
@@ -61,9 +65,19 @@ func (uc todo) BuildWeeklyReportTodos() error {
 		dw.SetHeadingBlocks(append(dw.HeadingBlocks(), &e))
 	}
 
-	err = uc.r.TodoWeekly().Save(dw, true)
+	if err := uc.r.TodoWeekly().Save(dw, true); err != nil {
+		return nil, common.Wrap(err, common.ErrorTypeService, "error saving weekly report")
+	}
+
+	return dw, nil
+}
+
+func (uc todo) BuildWeeklyReportTodos() error {
+	fmt.Print("Building weekly report...\n")
+
+	dw, err := uc.buildWeeklyReportTodos()
 	if err != nil {
-		return common.Wrap(err, common.ErrorTypeService, "error saving weekly report")
+		return err
 	}
 
 	fpath := filepath.Join(uc.c.TodosDir(), dw.FileName())
@@ -72,6 +86,30 @@ func (uc todo) BuildWeeklyReportTodos() error {
 		return common.Wrap(err, common.ErrorTypeService, "error opening editor")
 	}
 
+	return nil
+}
+
+// BuildWeeklyReportTodosNonInteractive builds the weekly report without launching
+// the editor and without printing the "Building weekly report..." progress line to
+// stdout (that would pollute the machine-readable output). It backs
+// `todos weekly --no-open` / `todos weekly --json`.
+//
+// On success it writes the weekly report's TodosDir-relative path (one line) to
+// stdout, or a todoWeeklyResultDTO when asJSON is true. Logs and errors go to
+// stderr.
+func (uc todo) BuildWeeklyReportTodosNonInteractive(asJSON bool) error {
+	dw, err := uc.buildWeeklyReportTodos()
+	if err != nil {
+		return err
+	}
+
+	relPath := dw.FileName()
+
+	if asJSON {
+		return writeJSON(todoWeeklyResultDTO{Path: relPath})
+	}
+
+	fmt.Fprintln(os.Stdout, relPath)
 	return nil
 }
 

@@ -82,10 +82,11 @@ Both `weekly` and `index` run a tidy pass first (see [Tidy behavior](#tidy-behav
 
 ```bash
 # Create today's task file
-memov2 todos new
+# (`todos new` is a retained alias for this command)
+memov2 todos create
 
 # Recreate today's task file from scratch
-memov2 todos new --truncate   # -t
+memov2 todos create --truncate   # -t
 
 # Generate a weekly task report (writes todos/weekly_report.md, then opens it)
 memov2 todos weekly
@@ -110,8 +111,8 @@ memov2 exposes a non-interactive surface for AI agents and scripts. Every
 command below writes its data to **stdout only** (logs and errors stay on
 stderr) and never opens a TUI or the editor, so output can be piped straight to
 `jq`. The read commands take a `--json` flag; the write commands (`memos create`,
-`memos rename <path> <title>`) print the target memo's relative path by default,
-or a JSON object with `--json`.
+`memos rename <path> <title>`, `todos create`, `todos weekly`) print the target
+file's relative path by default, or a JSON object with `--json`.
 
 ### Read commands
 
@@ -121,6 +122,8 @@ or a JSON object with `--json`.
 | `memos categories` | `a/b/c` per line | array of `{ category, path }` |
 | `memos show <path>` | raw markdown of the file | `{ title, path, category, date, top_level_content, headings[] }` |
 | `memos search <query>` | `title<TAB>path` per matched memo | array of `{ title, path, category, matches[] }` |
+| `todos list` | `date<TAB>path` per line | array of `{ date, path }` |
+| `todos show <path>` | raw markdown of the file | `{ date, path, top_level_content, headings[] }` |
 | `config show` | structured log lines | `{ base_dir, todos_dir, memos_dir, todos_days_to_seek }` |
 
 ### Write commands
@@ -129,24 +132,31 @@ or a JSON object with `--json`.
 | --- | --- | --- |
 | `memos create --title <t> [--category a/b/c]` | new memo's relative path (one line) | `{ title, path, category, date }` |
 | `memos rename <path> <new-title>` | new relative path (one line) | `{ path, old_title, new_title, new_path }` |
+| `todos create --no-open` | today's todo relative path (one line) | `{ date, path }` |
+| `todos weekly --no-open` | weekly report relative path (one line) | `{ path }` |
 
 Notes:
 
 - `memos create` is dual-mode. With **no `--title`** it launches the interactive category-picker TUI and opens the new memo in the editor (the `memos new` alias behaves identically); a blank `--title` (empty or whitespace-only) is always treated as interactive, so an untitled memo is never created silently. With **`--title`** it creates non-interactively (no TUI, no editor) and reads the memo **body from stdin** (a terminal or empty stdin creates a memo with no body; it never blocks). A `--title` that escapes the memos directory is rejected with a non-zero exit and nothing on stdout.
 - `memos rename` with **no** arguments launches the interactive TUI; pass `<path> <new-title>` for non-interactive renaming. `memos search` with no query behaves the same way.
-- Paths resolve under the memos directory; a path that escapes it (e.g. `../../etc/passwd`) is rejected with a non-zero exit and nothing on stdout.
-- `<path>` is relative to the memos directory (as printed by `memos list --short`) or absolute.
+- `todos create` (with `todos new` as a retained alias) and `todos weekly` open the editor by default. Pass **`--no-open`** to suppress the editor and print the file's relative path instead; **`--json`** implies `--no-open`. `todos create` keeps its "today's file" semantics: if today's file already exists it is left intact (add `--truncate`/`-t` to regenerate) and its path is still reported. `todos show --json` covers daily todo files only; read the weekly report or template in text mode.
+- Paths resolve under their base directory (memos for `memos …`, todos for `todos …`); a path that escapes it (e.g. `../../etc/passwd`) is rejected with a non-zero exit and nothing on stdout.
+- `<path>` is relative to the memos/todos directory (as printed by `… list --short`) or absolute.
 
 ```bash
 # Read examples
 memov2 memos list --json | jq '.[].title'
 memov2 memos search 会議 --json | jq '.[] | {title, matches: (.matches | length)}'
 memov2 memos show "$(memov2 memos list --short --json | jq -r '.[0].path')" --json | jq .top_level_content
+memov2 todos list --json | jq '.[].path'
+memov2 todos show "$(memov2 todos list --short --json | jq -r '.[0].path')" --json | jq '.headings[].heading'
 
 # Write examples
 echo "# meeting notes" | memov2 memos create --title "Standup" --category work/daily
 printf 'body from stdin' | memov2 memos create --title "Idea" --json | jq -r .path
 memov2 memos rename "$(memov2 memos list --short --json | jq -r '.[0].path')" "Renamed" --json
+memov2 todos create --json | jq -r .path
+memov2 todos weekly --no-open
 ```
 
 ## Configuration

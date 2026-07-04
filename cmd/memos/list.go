@@ -15,17 +15,15 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list all memos",
 	Long:  `List all memos in "title\tpath" format. Useful with peco for interactive selection.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with nothing on stdout,
+	// upholding the machine-output contract for --json consumers.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-		err = ap.Services().Memo().List(!shortFlag, listJSONFlag)
-		if err != nil {
-			cmd.PrintErrf("Error listing memos: %v\n", err)
-			return
-		}
+		return ap.Services().Memo().List(!shortFlag, listJSONFlag)
 	},
 }
 
