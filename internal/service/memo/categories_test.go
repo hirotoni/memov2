@@ -1,6 +1,7 @@
 package memo
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"testing"
@@ -11,6 +12,42 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListCategories_JSON(t *testing.T) {
+	uc, _ := newTestMemoService(t)
+	require.NoError(t, uc.GenerateMemoFile("Memo A", []string{"work"}))
+	require.NoError(t, uc.GenerateMemoFile("Memo B", []string{"work", "projects"}))
+
+	out := captureStdout(t, func() {
+		require.NoError(t, uc.ListCategories(true))
+	})
+
+	var items []struct {
+		Category []string `json:"category"`
+		Path     string   `json:"path"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &items), "output must be valid JSON: %q", out)
+
+	byPath := map[string][]string{}
+	for _, it := range items {
+		byPath[it.Path] = it.Category
+	}
+	assert.Equal(t, []string{"work"}, byPath["work"])
+	assert.Equal(t, []string{"work", "projects"}, byPath["work/projects"])
+}
+
+func TestListCategories_JSON_Empty(t *testing.T) {
+	uc, _ := newTestMemoService(t)
+	require.NoError(t, uc.GenerateMemoFile("Root Memo", []string{}))
+
+	out := captureStdout(t, func() {
+		require.NoError(t, uc.ListCategories(true))
+	})
+
+	var items []interface{}
+	require.NoError(t, json.Unmarshal([]byte(out), &items))
+	assert.Empty(t, items)
+}
 
 func TestListCategories_Success(t *testing.T) {
 	// Setup
@@ -40,7 +77,7 @@ func TestListCategories_Success(t *testing.T) {
 	os.Stdout = w
 
 	// Execute
-	err = uc.ListCategories()
+	err = uc.ListCategories(false)
 	require.NoError(t, err)
 
 	// Read captured output
@@ -80,7 +117,7 @@ func TestListCategories_Empty(t *testing.T) {
 	os.Stdout = w
 
 	// Execute
-	err = uc.ListCategories()
+	err = uc.ListCategories(false)
 	require.NoError(t, err)
 
 	// Read captured output

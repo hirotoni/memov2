@@ -2,7 +2,9 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
@@ -50,7 +52,7 @@ func TestConfig_Show(t *testing.T) {
 	uc := NewConfig(configProvider, repos, mockEditor, logger)
 
 	// Execute
-	uc.Show()
+	uc.Show(false)
 
 	// Read captured output
 	output := buf.String()
@@ -61,6 +63,55 @@ func TestConfig_Show(t *testing.T) {
 	assert.Contains(t, output, "memos_dir")
 	assert.Contains(t, output, "todos_daystoseek")
 	assert.Contains(t, output, tmpDir)
+}
+
+func TestConfig_Show_JSON(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	opts := toml.Option{BaseDir: tmpDir}
+	cfg, err := toml.NewConfig(opts)
+	require.NoError(t, err)
+
+	configProvider := toml.NewProvider(cfg)
+	// Logs go to a buffer so stderr does not pollute the captured stdout.
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+	repos := repositories.NewRepositories(configProvider, logger)
+	mockEditor := mock.NewMockEditor()
+	uc := NewConfig(configProvider, repos, mockEditor, logger)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+
+	// Execute
+	uc.Show(true)
+
+	w.Close()
+	os.Stdout = oldStdout
+	output := <-done
+
+	// Assert: stdout is a single valid JSON object with the expected keys.
+	var dto struct {
+		BaseDir         string `json:"base_dir"`
+		TodosDir        string `json:"todos_dir"`
+		MemosDir        string `json:"memos_dir"`
+		TodosDaysToSeek int    `json:"todos_days_to_seek"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(output), &dto), "output must be valid JSON: %q", output)
+	assert.Equal(t, tmpDir, dto.BaseDir)
+	assert.NotEmpty(t, dto.TodosDir)
+	assert.NotEmpty(t, dto.MemosDir)
+	// Non-json log path must not have run to stdout.
+	assert.NotContains(t, output, "Configuration")
 }
 
 func TestConfig_Edit_Success(t *testing.T) {

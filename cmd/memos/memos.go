@@ -21,4 +21,5 @@ func init() {
 	MemosCmd.AddCommand(searchCmd)
 	MemosCmd.AddCommand(renameCmd)
 	MemosCmd.AddCommand(categoriesCmd)
+	MemosCmd.AddCommand(showCmd)
 }

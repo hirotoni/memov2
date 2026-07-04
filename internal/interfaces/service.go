@@ -11,10 +11,12 @@ type Services interface {
 type MemoService interface {
 	BuildWeeklyReportMemos() error
 	GenerateMemoFile(title string, categoryTree []string) error
-	ListCategories() error
+	ListCategories(asJSON bool) error
 	GenerateMemoIndex() error
 	Browse() error
-	List(showFullPath bool) error
+	List(showFullPath, asJSON bool) error
+	Show(path string, asJSON bool) error
+	Search(query string, asJSON bool) error
 	Open(path string) error
 	Rename(path string, newTitle string) error
 	TidyMemos() error
@@ -33,6 +35,6 @@ type TodoService interface {
 
 // ConfigService defines the interface for config service operations
 type ConfigService interface {
-	Show()
+	Show(asJSON bool)
 	Edit() error
 }

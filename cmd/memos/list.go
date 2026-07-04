@@ -5,7 +5,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var shortFlag bool
+var (
+	shortFlag    bool
+	listJSONFlag bool
+)
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -18,7 +21,7 @@ var listCmd = &cobra.Command{
 			cmd.PrintErrf("Error initializing app: %v\n", err)
 			return
 		}
-		err = ap.Services().Memo().List(!shortFlag)
+		err = ap.Services().Memo().List(!shortFlag, listJSONFlag)
 		if err != nil {
 			cmd.PrintErrf("Error listing memos: %v\n", err)
 			return
@@ -28,4 +31,5 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().BoolVarP(&shortFlag, "short", "s", false, "show relative paths instead of full paths")
+	listCmd.Flags().BoolVar(&listJSONFlag, "json", false, "output as JSON to stdout")
 }

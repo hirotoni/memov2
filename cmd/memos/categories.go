@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var categoriesJSONFlag bool
+
 var categoriesCmd = &cobra.Command{
 	Use:   "categories",
 	Short: "list all categories",
@@ -15,10 +17,14 @@ var categoriesCmd = &cobra.Command{
 			cmd.PrintErrf("Error initializing app: %v\n", err)
 			return
 		}
-		err = ap.Services().Memo().ListCategories()
+		err = ap.Services().Memo().ListCategories(categoriesJSONFlag)
 		if err != nil {
 			cmd.PrintErrf("Error listing categories: %v\n", err)
 			return
 		}
 	},
+}
+
+func init() {
+	categoriesCmd.Flags().BoolVar(&categoriesJSONFlag, "json", false, "output as JSON to stdout")
 }

@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var showJSONFlag bool
+
 // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -17,8 +19,10 @@ var showCmd = &cobra.Command{
 			return
 		}
 
-		ap.Services().Config().Show()
+		ap.Services().Config().Show(showJSONFlag)
 	},
 }
 
-func init() {}
+func init() {
+	showCmd.Flags().BoolVar(&showJSONFlag, "json", false, "output as JSON to stdout")
+}
