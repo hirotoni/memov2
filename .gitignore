@@ -11,3 +11,6 @@ AGENTS.md
 memov2
 *.test
 *.out
+
+# Local implementation plans
+docs/plans/
