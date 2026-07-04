@@ -12,7 +12,6 @@ var MemosCmd = &cobra.Command{
 }
 
 func init() {
-	MemosCmd.AddCommand(newCmd)
 	MemosCmd.AddCommand(createCmd)
 	MemosCmd.AddCommand(weeklyCmd)
 	MemosCmd.AddCommand(indexCmd)

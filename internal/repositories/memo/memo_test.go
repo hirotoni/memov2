@@ -558,6 +558,55 @@ func TestSave_InvalidCategoryTree(t *testing.T) {
 	}
 }
 
+func TestSave_InvalidTitle(t *testing.T) {
+	// An unsafe title must be rejected at the write chokepoint so that BOTH the
+	// interactive (TUI) and non-interactive create paths — and Move/Rename/Duplicate,
+	// which Save internally — inherit the guard. Cover the two invariants the whole
+	// write surface protects: a traversal/separator title, and a blank title.
+	cases := []struct {
+		name  string
+		title string
+	}{
+		{"traversal separator title", "../../pwned"},
+		{"empty title", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup
+			tmpDir := t.TempDir()
+			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+			repo := NewMemo(tmpDir, logger)
+
+			memo := createTestMemo(t, tc.title, []string{}, nil)
+
+			// Execute
+			err := repo.Save(memo, false)
+
+			// Assert
+			if err == nil {
+				t.Fatalf("expected error when saving memo with title %q", tc.title)
+			}
+			var appErr *common.AppError
+			if !errors.As(err, &appErr) {
+				t.Fatalf("expected a *common.AppError, got %T: %v", err, err)
+			}
+			if appErr.Type != common.ErrorTypeValidation {
+				t.Errorf("expected ErrorTypeValidation, got %v", appErr.Type)
+			}
+
+			// Nothing should have been written anywhere under tmpDir.
+			entries, err := os.ReadDir(tmpDir)
+			if err != nil {
+				t.Fatalf("failed to read tmpDir: %v", err)
+			}
+			if len(entries) != 0 {
+				t.Errorf("expected no files to be written, found %d entries", len(entries))
+			}
+		})
+	}
+}
+
 func TestMetadata_InvalidCategoryTree(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()

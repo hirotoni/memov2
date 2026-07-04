@@ -27,13 +27,16 @@ Requires Go 1.24.3 or later.
 
 ### Memos
 
-`new`, `search`, and `rename` are interactive: they open an embedded terminal UI
-(no external tools required). See [Interactive commands](#interactive-commands) for
-the keybindings.
+`create`, `search`, and `rename` are dual-mode: with no arguments/flags they open
+an embedded terminal UI (no external tools required); given the right flag/args
+they run non-interactively for AI/automation. See
+[Interactive commands](#interactive-commands) for the keybindings and
+[AI / automation](#ai--automation) for the non-interactive contracts.
 
 ```bash
-# Create a memo: pick a category in a TUI, type a title
-memov2 memos new
+# Create a memo interactively: pick a category in a TUI, type a title
+# (`memos new` is a retained alias for this interactive mode)
+memov2 memos create
 
 # Search memos and open the selection (romaji-aware incremental search)
 memov2 memos search
@@ -129,7 +132,7 @@ or a JSON object with `--json`.
 
 Notes:
 
-- `memos create` reads the memo **body from stdin**. If stdin is a terminal or empty, the memo is created with no body (the command never blocks). Title is required; an empty title exits non-zero with nothing on stdout.
+- `memos create` is dual-mode. With **no `--title`** it launches the interactive category-picker TUI and opens the new memo in the editor (the `memos new` alias behaves identically); a blank `--title` (empty or whitespace-only) is always treated as interactive, so an untitled memo is never created silently. With **`--title`** it creates non-interactively (no TUI, no editor) and reads the memo **body from stdin** (a terminal or empty stdin creates a memo with no body; it never blocks). A `--title` that escapes the memos directory is rejected with a non-zero exit and nothing on stdout.
 - `memos rename` with **no** arguments launches the interactive TUI; pass `<path> <new-title>` for non-interactive renaming. `memos search` with no query behaves the same way.
 - Paths resolve under the memos directory; a path that escapes it (e.g. `../../etc/passwd`) is rejected with a non-zero exit and nothing on stdout.
 - `<path>` is relative to the memos directory (as printed by `memos list --short`) or absolute.
@@ -262,13 +265,14 @@ Fuzzy search across titles, categories, body text, and headings. Supports romaji
 
 ## Interactive commands
 
-`memos search`, `memos new`, and `memos rename` open self-contained terminal UIs
-(no external tools required). They share a common look and keybindings.
+`memos search`, `memos create`, and `memos rename` open self-contained terminal
+UIs (no external tools required) when run without their non-interactive
+flag/args. They share a common look and keybindings.
 
 | Command | Flow |
 |---------|------|
 | `memos search` | Type to filter (romaji-aware), `Ctrl+n` / `Ctrl+p` (or `↓` / `↑`) to move the highlight, `Enter` opens the highlighted memo in the editor |
-| `memos new` | Pick a category, "no category", or type a new category path (a `+ new category "…"` row appears) — then type a title; the memo is created and opened |
+| `memos create` (or the `memos new` alias) | With no `--title`: pick a category, "no category", or type a new category path (a `+ new category "…"` row appears) — then type a title; the memo is created and opened. With `--title`, it runs non-interactively (see [AI / automation](#ai--automation)) |
 | `memos rename` | Pick a memo, then type a new title; both the filename and the in-file title are updated |
 
 Common keys: type to filter, `Ctrl+n` / `Ctrl+p` (or arrows) to navigate, `Enter` to

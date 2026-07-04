@@ -177,6 +177,15 @@ func (r *memo) Save(file interfaces.MemoFileInterface, truncate bool) error {
 		return common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
 	}
 
+	// Defense-in-depth chokepoint: the title is encoded into the on-disk filename
+	// by domain.FileName(), which only substitutes spaces. Validate it here so BOTH
+	// the interactive TUI create path (which does not pre-validate the typed title)
+	// and the non-interactive service paths inherit the guard. Rename/Move call
+	// Save internally, so they are covered too.
+	if err := domain.ValidateMemoTitle(file.Title()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid memo title")
+	}
+
 	// initialize location
 	locationPath := filepath.Join(r.dir, file.Location())
 	if err := platform.EnsureDir(locationPath); err != nil {
