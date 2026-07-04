@@ -36,6 +36,11 @@ func TestSearchMemo(t *testing.T) {
 		},
 	})
 
+	// Add top level body content (directly under the title, before the first "##" heading)
+	memo.SetTopLevelBodyContent(&markdown.HeadingBlock{
+		ContentText: "Intro text right under the title\n直下の日本語テキスト",
+	})
+
 	// Test cases
 	tests := []struct {
 		name          string
@@ -135,6 +140,20 @@ func TestSearchMemo(t *testing.T) {
 			matchType:     MatchContent,
 			wantMatch:     true,
 			wantMatchText: "Discussed project timeline",
+		},
+		{
+			name:          "Top level content match English",
+			query:         "Intro",
+			matchType:     MatchContent,
+			wantMatch:     true,
+			wantMatchText: "Intro text right under the title",
+		},
+		{
+			name:          "Top level content match Japanese",
+			query:         "直下",
+			matchType:     MatchContent,
+			wantMatch:     true,
+			wantMatchText: "直下の日本語テキスト",
 		},
 	}
 

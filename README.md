@@ -176,10 +176,6 @@ Before building their output, `memos weekly` and `memos index` run a tidy pass o
 
 `weekly_report.md` and `index.md` are excluded from the move. If you edit a memo's category frontmatter by hand, the next `weekly` or `index` run is what relocates the file on disk.
 
-## Limitations
-
-- **Title-level content is not indexed by search.** Body text placed directly under the `# Title` heading (before the first `##` heading) is not matched by `memos search`. Put searchable content under a `##` heading.
-
 ## TUI (`memov2 memos browse`)
 
 The TUI has two modes — Browse and Search — switchable with `Tab`.
