@@ -39,8 +39,13 @@ type Heading struct {
 }
 
 var (
-	HeadingTodos     = Heading{Text: "todos", Level: 2}
-	HeadingWantTodos = Heading{Text: "wanttodos", Level: 2}
+	HeadingTodos   = Heading{Text: "todos", Level: 2}
+	HeadingBacklog = Heading{Text: "backlog", Level: 2}
+
+	// HeadingBacklogLegacy is the former text of the backlog heading. It is kept
+	// only so the migration command (`todos migrate`) can find and rewrite files
+	// created before the rename. New files use HeadingBacklog.
+	HeadingBacklogLegacy = Heading{Text: "wanttodos", Level: 2}
 )
 
 func (h *MarkdownHandler) findHeadingAndContent(doc ast.Node, source []byte, heading Heading) (ast.Node, []ast.Node) {

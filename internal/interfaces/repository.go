@@ -29,6 +29,11 @@ type TodoRepo interface {
 	Save(file TodoFileInterface, truncate bool) error
 	TodosTemplate(date time.Time) (TodoFileInterface, error)
 	FindTodosFileByDate(date time.Time) (TodoFileInterface, error)
+	// RewriteHeadingText rewrites every level-2 heading whose text is oldText to
+	// newText across the todo files (daily files and the template) in the todo
+	// directory. When dryRun is true no file is modified. It returns the
+	// directory-relative paths of the files that were (or would be) changed.
+	RewriteHeadingText(oldText, newText string, dryRun bool) ([]string, error)
 }
 
 // WeeklyRepo defines the interface for weekly report repository operations

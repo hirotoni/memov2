@@ -2,6 +2,7 @@ package todo
 
 import (
 	"bufio"
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -130,6 +131,68 @@ func (r *todo) TodosTemplate(date time.Time) (interfaces.TodoFileInterface, erro
 	f.SetHeadingBlocks(hbs)
 
 	return f, nil
+}
+
+// RewriteHeadingText rewrites every level-2 heading whose text is oldText to
+// newText across the todo files (daily files matching FileNameRegexTodo and the
+// todos_template.md) in the todo directory. The rewrite is a targeted,
+// line-level replacement so the rest of each file's content is preserved
+// byte-for-byte. When dryRun is true, files are inspected but not modified.
+func (r *todo) RewriteHeadingText(oldText, newText string, dryRun bool) ([]string, error) {
+	reg, err := regexp.Compile(domain.FileNameRegexTodo)
+	if err != nil {
+		return nil, common.Wrap(err, common.ErrorTypeRepository, "invalid regex pattern")
+	}
+
+	// Matches a level-2 heading line whose text is exactly oldText, e.g. "## wanttodos".
+	headingRe := regexp.MustCompile(`(?m)^##[ \t]+` + regexp.QuoteMeta(oldText) + `[ \t]*$`)
+	replacement := "## " + newText
+
+	var changed []string
+	err = filepath.Walk(r.dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		name := info.Name()
+		if !reg.MatchString(name) && name != "todos_template.md" {
+			return nil
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, "error reading todo file")
+		}
+
+		out := headingRe.ReplaceAll(b, []byte(replacement))
+		if bytes.Equal(out, b) {
+			return nil // heading not present; nothing to rewrite
+		}
+
+		rel, relErr := filepath.Rel(r.dir, path)
+		if relErr != nil {
+			rel = path
+		}
+		changed = append(changed, rel)
+
+		if dryRun {
+			return nil
+		}
+
+		if err := os.WriteFile(path, out, info.Mode().Perm()); err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, "error writing todo file")
+		}
+		r.logger.Info("Heading rewritten", "path", path, "from", oldText, "to", newText)
+		return nil
+	})
+	if err != nil {
+		return nil, common.Wrap(err, common.ErrorTypeFileSystem, "error walking through directory")
+	}
+
+	return changed, nil
 }
 
 func (r *todo) FindTodosFileByDate(date time.Time) (interfaces.TodoFileInterface, error) {

@@ -71,7 +71,24 @@ func seedTodoFile(t *testing.T, todosDir string, date time.Time, todosContent st
 	require.NoError(t, err)
 	f.SetHeadingBlocks([]*markdown.HeadingBlock{
 		{HeadingText: utils.HeadingTodos.Text, ContentText: todosContent, Level: 2},
-		{HeadingText: utils.HeadingWantTodos.Text, Level: 2},
+		{HeadingText: utils.HeadingBacklog.Text, Level: 2},
+	})
+	require.NoError(t, r.Save(f, true))
+}
+
+// seedLegacyTodoFile is like seedTodoFile but writes the backlog section using the
+// pre-rename heading text ("wanttodos") instead of "backlog". It simulates a daily
+// todo file created before the heading rename (and before running `todos migrate`),
+// so inheritance can be exercised against a legacy file.
+func seedLegacyTodoFile(t *testing.T, todosDir string, date time.Time, backlogContent string) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	r := todoRepo.NewTodo(todosDir, logger)
+	f, err := domain.NewTodosFile(date)
+	require.NoError(t, err)
+	f.SetHeadingBlocks([]*markdown.HeadingBlock{
+		{HeadingText: utils.HeadingTodos.Text, Level: 2},
+		{HeadingText: utils.HeadingBacklogLegacy.Text, ContentText: backlogContent, Level: 2},
 	})
 	require.NoError(t, r.Save(f, true))
 }

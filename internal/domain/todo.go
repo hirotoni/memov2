@@ -45,7 +45,7 @@ func NewTodoTemplateFile() (TodoFileInterface, error) {
 
 	f.SetHeadingBlocks([]*markdown.HeadingBlock{
 		{HeadingText: "todos", Level: 2},
-		{HeadingText: "wanttodos", Level: 2},
+		{HeadingText: "backlog", Level: 2},
 	})
 
 	return f, nil

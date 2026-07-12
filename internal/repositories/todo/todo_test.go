@@ -50,7 +50,7 @@ func TestTodoRepoImpl_Save(t *testing.T) {
 			date: date,
 			headingBlocks: []*markdown.HeadingBlock{
 				createTestHeadingBlock(2, "todos", "Buy groceries\nClean house\n"),
-				createTestHeadingBlock(2, "wanttodos", "Learn Go\nRead book\n"),
+				createTestHeadingBlock(2, "backlog", "Learn Go\nRead book\n"),
 			},
 			truncate:   false,
 			goldenFile: "todo_save_new_todo",
@@ -189,7 +189,7 @@ func TestTodoRepoImpl_TodosTemplate(t *testing.T) {
 			t.Errorf("expected 2 heading blocks, got %d", len(headingBlocks))
 		}
 
-		expectedHeadings := []string{"todos", "wanttodos"}
+		expectedHeadings := []string{"todos", "backlog"}
 		for i, expected := range expectedHeadings {
 			if headingBlocks[i].HeadingText != expected {
 				t.Errorf("expected heading %s, got %s", expected, headingBlocks[i].HeadingText)

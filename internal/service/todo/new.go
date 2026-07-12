@@ -96,8 +96,13 @@ func (uc todo) inheritTodos(today time.Time, daysToSeek int) (domain.TodoFileInt
 		// ファイルに必要な情報を設定
 		for _, entity := range found.HeadingBlocks() {
 			switch entity.HeadingText {
-			// todos, wanttodos のものだけ継承する
-			case utils.HeadingTodos.Text, utils.HeadingWantTodos.Text:
+			// todos, backlog のものだけ継承する
+			case utils.HeadingTodos.Text, utils.HeadingBacklog.Text:
+				f.OverrideHeadingBlockMatched(entity)
+			// rename 前の legacy backlog 見出し ("wanttodos") は backlog に正規化してから継承する
+			// (未 migrate のまま todos create された場合の carryover 消失を防ぐ)
+			case utils.HeadingBacklogLegacy.Text:
+				entity.HeadingText = utils.HeadingBacklog.Text
 				f.OverrideHeadingBlockMatched(entity)
 			}
 		}

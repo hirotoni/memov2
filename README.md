@@ -90,9 +90,15 @@ memov2 todos create --truncate   # -t
 
 # Generate a weekly task report (writes todos/weekly_report.md, then opens it)
 memov2 todos weekly
+
+# Rename the legacy "wanttodos" heading to "backlog" in existing task files
+memov2 todos migrate --dry-run   # preview affected files first
+memov2 todos migrate
 ```
 
 Unlike `memos weekly`, `todos weekly` does not run the tidy pass; it only reads the task files for the period and overwrites `todos/weekly_report.md`.
+
+The task template's second section is `## backlog` (renamed from the former `## wanttodos`). New task files already use `backlog`; run `todos migrate` once to rewrite `## wanttodos` to `## backlog` in files created before the rename so their contents keep being inherited. Use `--dry-run` to preview the affected files without modifying them.
 
 ### Config
 
@@ -233,7 +239,7 @@ Filename: `YYYYMMDDDAY_todos.md`
   - [ ] Subtask 2
 - [x] Completed task
 
-## wanttodos
+## backlog
 ```
 
 ## Tidy behavior (`weekly` / `index`)

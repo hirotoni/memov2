@@ -36,6 +36,7 @@ type TodoService interface {
 	BuildWeeklyReportTodosNonInteractive(asJSON bool) error
 	List(showFullPath, asJSON bool) error
 	Show(path string, asJSON bool) error
+	MigrateBacklogHeading(dryRun bool) error
 }
 
 // ConfigService defines the interface for config service operations

@@ -19,4 +19,5 @@ func init() {
 	TodosCmd.AddCommand(weeklyCmd)
 	TodosCmd.AddCommand(listCmd)
 	TodosCmd.AddCommand(showCmd)
+	TodosCmd.AddCommand(migrateCmd)
 }
