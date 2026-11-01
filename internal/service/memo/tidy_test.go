@@ -77,3 +77,29 @@ func TestTidyMemos_SkipsInvalidCategory(t *testing.T) {
 	assert.FileExists(t, goodTargetPath, "valid memo should have been moved to its category directory")
 	assert.NoFileExists(t, goodSourcePath, "valid memo should no longer exist at its original location")
 }
+
+// TestTidyMemos_MovesMemoInSubdirectoryToDeeperCategory reproduces adding a
+// new level to a memo's frontmatter category (work -> work/project) while the
+// file still sits in work/. Tidy must move it into the new work/project/.
+func TestTidyMemos_MovesMemoInSubdirectoryToDeeperCategory(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := toml.NewConfig(toml.Option{BaseDir: tmpDir})
+	require.NoError(t, err)
+
+	configProvider := toml.NewProvider(cfg)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	repos := repositories.NewRepositories(configProvider, logger)
+	uc := NewMemo(configProvider, repos, mock.NewMockEditor(), logger)
+
+	memosDir := configProvider.MemosDir()
+	m, err := domain.NewMemoFile(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), "Deeper Memo", []string{"work", "project"})
+	require.NoError(t, err)
+	sourcePath := filepath.Join(memosDir, "work", m.FileName())
+	require.NoError(t, os.MkdirAll(filepath.Dir(sourcePath), 0o755))
+	require.NoError(t, os.WriteFile(sourcePath, []byte(m.ContentString()), 0o644))
+
+	require.NoError(t, uc.TidyMemos())
+
+	assert.FileExists(t, filepath.Join(memosDir, "work", "project", m.FileName()))
+	assert.NoFileExists(t, sourcePath)
+}

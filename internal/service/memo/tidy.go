@@ -76,7 +76,18 @@ func (uc memo) moveFilesIfNeeded(sourcePath string, info os.FileInfo) error {
 		return nil
 	}
 	title := extractTitleFromMemoFilename(info.Name())
-	tempMemo, err := domain.NewMemoFile(date, title, []string{})
+	// The lookup memo must point at the file's current directory, otherwise
+	// the repository resolves it under MemosDir() root and misses every file
+	// living in a subdirectory.
+	relDir, err := filepath.Rel(uc.config.MemosDir(), filepath.Dir(sourcePath))
+	if err != nil {
+		return nil
+	}
+	var currentTree []string
+	if relDir != "." {
+		currentTree = strings.Split(relDir, string(filepath.Separator))
+	}
+	tempMemo, err := domain.NewMemoFile(date, title, currentTree)
 	if err != nil {
 		return nil
 	}
