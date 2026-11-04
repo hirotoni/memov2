@@ -180,8 +180,8 @@ func (r *memo) Save(file interfaces.MemoFileInterface, truncate bool) error {
 	// Defense-in-depth chokepoint: the title is encoded into the on-disk filename
 	// by domain.FileName(), which only substitutes spaces. Validate it here so BOTH
 	// the interactive TUI create path (which does not pre-validate the typed title)
-	// and the non-interactive service paths inherit the guard. Rename/Move call
-	// Save internally, so they are covered too.
+	// and the non-interactive service paths inherit the guard. Rename/Move/
+	// Duplicate go through writeRaw, which applies the same check.
 	if err := domain.ValidateMemoTitle(file.Title()); err != nil {
 		return common.Wrap(err, common.ErrorTypeValidation, "invalid memo title")
 	}
@@ -343,26 +343,31 @@ func (r *memo) Move(file interfaces.MemoFileInterface, newCategoryTree []string)
 		return common.Wrap(err, common.ErrorTypeRepository, "error getting memo file")
 	}
 
+	// Read the raw content so that everything except the category entry
+	// (other frontmatter keys, sub-headings before the first `##`, formatting)
+	// is carried over unchanged.
+	raw, err := repoCommon.ReadMarkdownFile(currentPath)
+	if err != nil {
+		return err
+	}
+
 	// Update category tree
 	mm.SetCategoryTree(newCategoryTree)
 
-	// Create new directory if needed
-	newLocation := filepath.Join(r.dir, mm.Location())
-	if err := platform.EnsureDir(newLocation); err != nil {
-		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("error ensuring directory: %s", newLocation))
-	}
-
 	// Create new file path
-	newPath := filepath.Join(newLocation, mm.FileName())
+	newPath := filepath.Join(r.dir, mm.Location(), mm.FileName())
 
 	// Write content to new location
-	err = r.Save(mm, true)
-	if err != nil {
+	if err := r.writeRaw(mm, domain.RewriteMemoCategory(string(raw), newCategoryTree), currentPath); err != nil {
 		return common.Wrap(err, common.ErrorTypeRepository, fmt.Sprintf("failed to save file: %s", newPath))
 	}
 
-	// Remove old file only if it's different from the new location
-	if currentPath != newPath {
+	// Remove old file only if it's different from the new location. On a
+	// case-insensitive filesystem a case-only category change yields a
+	// different path string for the same file, which must not be removed.
+	// The directory keeps its existing casing: renaming it would also move
+	// every other memo in it.
+	if currentPath != newPath && !sameFile(currentPath, newPath) {
 		err = os.Remove(currentPath)
 		if err != nil {
 			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to remove old file: %s", currentPath))
@@ -415,24 +420,37 @@ func (r *memo) Rename(file interfaces.MemoFileInterface, newTitle string) error 
 		return common.Wrap(err, common.ErrorTypeRepository, "error getting memo file")
 	}
 
+	// Read the raw content so that everything except the H1 title line is
+	// carried over unchanged.
+	raw, err := repoCommon.ReadMarkdownFile(oldPath)
+	if err != nil {
+		return err
+	}
+
 	// Update the title
 	mm.SetTitle(newTitle)
 
 	// Create new file path with new title
 	newPath := filepath.Join(r.dir, mm.Location(), mm.FileName())
 
-	// If the path is the same (shouldn't happen but check anyway), just update content
+	// Save the file with new name (or rewrite in place if the path is unchanged)
+	if err := r.writeRaw(mm, domain.RewriteMemoTitle(string(raw), newTitle), oldPath); err != nil {
+		return common.Wrap(err, common.ErrorTypeRepository, "failed to save renamed file")
+	}
 	if oldPath == newPath {
-		// Just save with updated title in content
-		if err := r.Save(mm, true); err != nil {
-			return common.Wrap(err, common.ErrorTypeRepository, "failed to save renamed file")
-		}
 		return nil
 	}
 
-	// Save the file with new name
-	if err := r.Save(mm, true); err != nil {
-		return common.Wrap(err, common.ErrorTypeRepository, "failed to save renamed file")
+	// On a case-insensitive filesystem a case-only title change yields a
+	// different path string for the same file. The write above landed on the
+	// existing entry (keeping its old-cased name), so the file must not be
+	// removed; rename it directly to apply the new casing instead.
+	if sameFile(oldPath, newPath) {
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to rename file: %s", oldPath))
+		}
+		r.logger.Info("Renamed file", "from", oldPath, "to", newPath)
+		return nil
 	}
 
 	// Remove old file
@@ -471,17 +489,107 @@ func (r *memo) Duplicate(file interfaces.MemoFileInterface) (interfaces.MemoFile
 		return nil, common.Wrap(err, common.ErrorTypeRepository, "error creating duplicate memo")
 	}
 
-	// Copy content
-	newMemo.SetTopLevelBodyContent(origMemo.TopLevelBodyContent())
-	newMemo.SetHeadingBlocks(origMemo.HeadingBlocks())
+	// Copy the raw content, replacing only the H1 title line, so that
+	// frontmatter keys and sub-headings the model does not hold are kept.
+	raw, err := repoCommon.ReadMarkdownFile(origPath)
+	if err != nil {
+		return nil, err
+	}
 
 	// Save the duplicate
-	if err := r.Save(newMemo, true); err != nil {
+	if err := r.writeRaw(newMemo, domain.RewriteMemoTitle(string(raw), newTitle), origPath); err != nil {
 		return nil, common.Wrap(err, common.ErrorTypeRepository, "failed to save duplicate")
 	}
+
+	// Fill the returned model's body from what was written, as before.
+	saved, err := r.Memo(newMemo)
+	if err != nil {
+		return nil, common.Wrap(err, common.ErrorTypeRepository, "error reading duplicate memo")
+	}
+	newMemo.SetTopLevelBodyContent(saved.TopLevelBodyContent())
+	newMemo.SetHeadingBlocks(saved.HeadingBlocks())
 
 	newPath := filepath.Join(r.dir, newMemo.Location(), newMemo.FileName())
 	r.logger.Info("Duplicated memo", "from", origPath, "to", newPath)
 
 	return newMemo, nil
+}
+
+// sameFile reports whether paths a and b refer to the same existing file.
+func sameFile(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(ai, bi)
+}
+
+// writeRaw writes content verbatim to the path derived from file (its
+// category location and filename), replacing any existing file. It applies
+// the same validation as Save, which it bypasses: Rename, Move and Duplicate
+// must keep the original file text instead of re-serializing the parsed model.
+//
+// The content is written to a temporary file next to the target and then
+// renamed over it, so rewriting a memo in place (same-path Rename or Move)
+// never leaves it truncated if the write fails midway. The new file takes the
+// permission bits of srcPath (0644 if it cannot be read), and an existing
+// symlink at the target is written through rather than replaced.
+func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string, srcPath string) error {
+	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
+	}
+	if err := domain.ValidateMemoTitle(file.Title()); err != nil {
+		return common.Wrap(err, common.ErrorTypeValidation, "invalid memo title")
+	}
+
+	locationPath := filepath.Join(r.dir, file.Location())
+	if err := platform.EnsureDir(locationPath); err != nil {
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("error ensuring directory: %s", locationPath))
+	}
+
+	path := filepath.Join(locationPath, file.FileName())
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to resolve symlink: %s", path))
+		}
+		path = resolved
+	}
+
+	mode := os.FileMode(0o644)
+	if fi, err := os.Stat(srcPath); err == nil {
+		mode = fi.Mode().Perm()
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".memov2-*.tmp")
+	if err != nil {
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to create temp file in: %s", filepath.Dir(path)))
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to write temp file: %s", tmpPath))
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to close temp file: %s", tmpPath))
+	}
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to set permissions: %s", tmpPath))
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to write file: %s", path))
+	}
+
+	r.logger.Info("File saved", "path", path)
+	return nil
 }
