@@ -41,8 +41,20 @@ func setupHome(t *testing.T) string {
 // runRoot executes RootCmd with args and returns what was written to the
 // process stdout (services write to os.Stdout directly) and the error that
 // Execute returned; a non-nil error makes main exit with status 1.
+// These tests share the package-global RootCmd and swap os.Stdout, so they
+// must not call t.Parallel.
 func runRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+
+	// Flag variables are package globals that survive across Execute calls;
+	// reset the target command's flags so earlier runs do not leak in.
+	c, _, err := RootCmd.Find(args)
+	require.NoError(t, err)
+	c.Flags().VisitAll(func(f *pflag.Flag) {
+		require.NoError(t, f.Value.Set(f.DefValue))
+		f.Changed = false
+	})
+
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
@@ -54,24 +66,19 @@ func runRoot(t *testing.T, args ...string) (string, error) {
 		done <- buf.String()
 	}()
 
-	// Flag variables are package globals that survive across Execute calls;
-	// reset the target command's flags so earlier runs do not leak in.
-	if c, _, findErr := RootCmd.Find(args); findErr == nil {
-		c.Flags().VisitAll(func(f *pflag.Flag) {
-			_ = f.Value.Set(f.DefValue)
-			f.Changed = false
-		})
-	}
-
 	var errBuf bytes.Buffer
+	RootCmd.SetOut(w)
 	RootCmd.SetErr(&errBuf)
 	RootCmd.SetArgs(args)
+	defer func() {
+		RootCmd.SetOut(nil)
+		RootCmd.SetErr(nil)
+		RootCmd.SetArgs(nil)
+	}()
 	execErr := RootCmd.Execute()
 
 	w.Close()
 	os.Stdout = oldStdout
-	RootCmd.SetErr(nil)
-	RootCmd.SetArgs(nil)
 	return <-done, execErr
 }
 
