@@ -94,12 +94,15 @@ func RewriteMemoTitle(content string, title string) string {
 			lines[idx] = "# " + title + lineEnding(lines[idx])
 			return strings.Join(lines, "")
 		}
-		if idx+1 < len(lines) && strings.TrimSpace(lines[idx]) != "" &&
-			setextH1Underline.MatchString(trimLineEnding(lines[idx+1])) {
-			out := append([]string{}, lines[:idx]...)
-			out = append(out, "# "+title+lineEnding(lines[idx+1]))
-			out = append(out, lines[idx+2:]...)
-			return strings.Join(out, "")
+		// Setext H1: one or more text lines followed by an "===" underline,
+		// with no blank line in between.
+		for u := idx + 1; u < len(lines) && strings.TrimSpace(lines[u]) != ""; u++ {
+			if setextH1Underline.MatchString(trimLineEnding(lines[u])) {
+				out := append([]string{}, lines[:idx]...)
+				out = append(out, "# "+title+lineEnding(lines[u]))
+				out = append(out, lines[u+1:]...)
+				return strings.Join(out, "")
+			}
 		}
 	}
 
@@ -114,8 +117,9 @@ func RewriteMemoTitle(content string, title string) string {
 // replaced by the given category tree. Other frontmatter keys and the body
 // are left untouched. A multi-line value (indented lines, "- item" lines or a
 // closing "]" after "category:") is replaced as a whole; blank and comment
-// lines inside it are dropped with it, those after it are kept. If the frontmatter has no category key
-// it is added as the first key; if there is no frontmatter, one is prepended.
+// lines inside it are dropped with it, those after it are kept. If the
+// frontmatter has no category key it is added as the first key; if there is
+// no frontmatter, one is prepended.
 func RewriteMemoCategory(content string, categoryTree []string) string {
 	lines := splitLines(content)
 	end := frontmatterBounds(lines)

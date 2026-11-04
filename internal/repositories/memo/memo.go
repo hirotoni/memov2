@@ -358,12 +358,14 @@ func (r *memo) Move(file interfaces.MemoFileInterface, newCategoryTree []string)
 	newPath := filepath.Join(r.dir, mm.Location(), mm.FileName())
 
 	// Write content to new location
-	if err := r.writeRaw(mm, domain.RewriteMemoCategory(string(raw), newCategoryTree)); err != nil {
+	if err := r.writeRaw(mm, domain.RewriteMemoCategory(string(raw), newCategoryTree), currentPath); err != nil {
 		return common.Wrap(err, common.ErrorTypeRepository, fmt.Sprintf("failed to save file: %s", newPath))
 	}
 
-	// Remove old file only if it's different from the new location
-	if currentPath != newPath {
+	// Remove old file only if it's different from the new location. On a
+	// case-insensitive filesystem a case-only category change yields a
+	// different path string for the same file, which must not be removed.
+	if currentPath != newPath && !sameFile(currentPath, newPath) {
 		err = os.Remove(currentPath)
 		if err != nil {
 			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to remove old file: %s", currentPath))
@@ -430,10 +432,12 @@ func (r *memo) Rename(file interfaces.MemoFileInterface, newTitle string) error 
 	newPath := filepath.Join(r.dir, mm.Location(), mm.FileName())
 
 	// Save the file with new name (or rewrite in place if the path is unchanged)
-	if err := r.writeRaw(mm, domain.RewriteMemoTitle(string(raw), newTitle)); err != nil {
+	if err := r.writeRaw(mm, domain.RewriteMemoTitle(string(raw), newTitle), oldPath); err != nil {
 		return common.Wrap(err, common.ErrorTypeRepository, "failed to save renamed file")
 	}
-	if oldPath == newPath {
+	// On a case-insensitive filesystem a case-only title change yields a
+	// different path string for the same file, which must not be removed.
+	if oldPath == newPath || sameFile(oldPath, newPath) {
 		return nil
 	}
 
@@ -481,7 +485,7 @@ func (r *memo) Duplicate(file interfaces.MemoFileInterface) (interfaces.MemoFile
 	}
 
 	// Save the duplicate
-	if err := r.writeRaw(newMemo, domain.RewriteMemoTitle(string(raw), newTitle)); err != nil {
+	if err := r.writeRaw(newMemo, domain.RewriteMemoTitle(string(raw), newTitle), origPath); err != nil {
 		return nil, common.Wrap(err, common.ErrorTypeRepository, "failed to save duplicate")
 	}
 
@@ -499,15 +503,30 @@ func (r *memo) Duplicate(file interfaces.MemoFileInterface) (interfaces.MemoFile
 	return newMemo, nil
 }
 
+// sameFile reports whether paths a and b refer to the same existing file.
+func sameFile(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(ai, bi)
+}
+
 // writeRaw writes content verbatim to the path derived from file (its
 // category location and filename), replacing any existing file. It applies
 // the same validation as Save, which it bypasses: Rename, Move and Duplicate
 // must keep the original file text instead of re-serializing the parsed model.
 //
-// The content is written to a temporary file in the target directory and
-// then renamed over the target, so rewriting a memo in place (same-path
-// Rename or Move) never leaves it truncated if the write fails midway.
-func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string) error {
+// The content is written to a temporary file next to the target and then
+// renamed over it, so rewriting a memo in place (same-path Rename or Move)
+// never leaves it truncated if the write fails midway. The new file takes the
+// permission bits of srcPath (0644 if it cannot be read), and an existing
+// symlink at the target is written through rather than replaced.
+func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string, srcPath string) error {
 	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
 		return common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
 	}
@@ -521,10 +540,22 @@ func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string) error
 	}
 
 	path := filepath.Join(locationPath, file.FileName())
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to resolve symlink: %s", path))
+		}
+		path = resolved
+	}
 
-	tmp, err := os.CreateTemp(locationPath, ".memov2-*.tmp")
+	mode := os.FileMode(0o644)
+	if fi, err := os.Stat(srcPath); err == nil {
+		mode = fi.Mode().Perm()
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".memov2-*.tmp")
 	if err != nil {
-		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to create temp file in: %s", locationPath))
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to create temp file in: %s", filepath.Dir(path)))
 	}
 	tmpPath := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpPath) }
@@ -538,7 +569,7 @@ func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string) error
 		cleanup()
 		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to close temp file: %s", tmpPath))
 	}
-	if err := os.Chmod(tmpPath, 0o644); err != nil {
+	if err := os.Chmod(tmpPath, mode); err != nil {
 		cleanup()
 		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to set permissions: %s", tmpPath))
 	}

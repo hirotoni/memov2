@@ -176,6 +176,58 @@ func TestMove_InvalidCategoryLeavesFileUntouched(t *testing.T) {
 	assert.Equal(t, richMemoBody, readFile(t, path))
 }
 
+func TestRename_CaseOnlyChangeKeepsMemo(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+	oldName := m.FileName()
+
+	require.NoError(t, repo.Rename(m, "orig"))
+
+	// Works on both case-sensitive and case-insensitive filesystems: the memo
+	// must survive under the new name with only the H1 changed.
+	newPath := filepath.Join(dir, "work", strings.Replace(oldName, "_Orig.md", "_orig.md", 1))
+	want := strings.Replace(richMemoBody, "# Orig\n", "# orig\n", 1)
+	assert.Equal(t, want, readFile(t, newPath))
+}
+
+func TestMove_CaseOnlyCategoryChangeKeepsMemo(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+
+	require.NoError(t, repo.Move(m, []string{"Work"}))
+
+	newPath := filepath.Join(dir, "Work", m.FileName())
+	want := strings.Replace(richMemoBody, `category: ["work"]`, `category: ["Work"]`, 1)
+	assert.Equal(t, want, readFile(t, newPath))
+}
+
+func TestRename_KeepsFileModeAndWritesThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+	path := filepath.Join(dir, m.Location(), m.FileName())
+	require.NoError(t, os.Chmod(path, 0o600))
+
+	// Move the real file elsewhere and leave a symlink at the memo path.
+	realPath := filepath.Join(t.TempDir(), "real.md")
+	require.NoError(t, os.Rename(path, realPath))
+	require.NoError(t, os.Symlink(realPath, path))
+
+	// Same-title rename rewrites in place: the symlink must remain and the
+	// real file must keep its mode.
+	require.NoError(t, repo.Rename(m, "Orig"))
+
+	fi, err := os.Lstat(path)
+	require.NoError(t, err)
+	assert.NotZero(t, fi.Mode()&os.ModeSymlink, "symlink must be kept")
+	real, err := os.Stat(realPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), real.Mode().Perm())
+	assert.Equal(t, richMemoBody, readFile(t, realPath))
+}
+
 func assertNoTempFiles(t *testing.T, dir string) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)

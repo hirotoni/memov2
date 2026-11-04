@@ -38,6 +38,12 @@ func TestRewriteMemoTitle(t *testing.T) {
 			want:    "---\ncategory: []\n---\n\n# New\n\nbody\n",
 		},
 		{
+			name:    "replaces multi-line setext H1",
+			content: "Orig first\nOrig second\n===\n\nbody\n",
+			title:   "New",
+			want:    "# New\n\nbody\n",
+		},
+		{
 			name:    "no frontmatter",
 			content: "# Orig\n\nbody\n",
 			title:   "New",
