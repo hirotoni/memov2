@@ -41,6 +41,6 @@ type TodoService interface {
 
 // ConfigService defines the interface for config service operations
 type ConfigService interface {
-	Show(asJSON bool)
+	Show(asJSON bool) error
 	Edit() error
 }

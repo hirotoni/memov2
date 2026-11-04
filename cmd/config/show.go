@@ -12,14 +12,14 @@ var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "show config",
 	Long:  `show config`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with the error on stderr.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-
-		ap.Services().Config().Show(showJSONFlag)
+		return ap.Services().Config().Show(showJSONFlag)
 	},
 }
 

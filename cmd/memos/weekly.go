@@ -12,18 +12,14 @@ var weeklyCmd = &cobra.Command{
 	Use:   "weekly",
 	Short: "generate weekly report for memos",
 	Long:  `generate weekly report for memos`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with the error on stderr.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-
-		err = ap.Services().Memo().BuildWeeklyReportMemos()
-		if err != nil {
-			cmd.PrintErrf("Error generating weekly report: %v\n", err)
-			return
-		}
+		return ap.Services().Memo().BuildWeeklyReportMemos()
 	},
 }
 

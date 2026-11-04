@@ -52,7 +52,7 @@ func TestConfig_Show(t *testing.T) {
 	uc := NewConfig(configProvider, repos, mockEditor, logger)
 
 	// Execute
-	uc.Show(false)
+	require.NoError(t, uc.Show(false))
 
 	// Read captured output
 	output := buf.String()
@@ -93,11 +93,12 @@ func TestConfig_Show_JSON(t *testing.T) {
 	}()
 
 	// Execute
-	uc.Show(true)
+	showErr := uc.Show(true)
 
 	w.Close()
 	os.Stdout = oldStdout
 	output := <-done
+	require.NoError(t, showErr)
 
 	// Assert: stdout is a single valid JSON object with the expected keys.
 	var dto struct {
@@ -160,4 +161,27 @@ func TestConfig_Edit_EditorError(t *testing.T) {
 	// Assert
 	require.Error(t, err)
 	assert.Equal(t, 1, len(mockEditor.Calls), "Editor should be called once")
+}
+
+func TestConfig_Show_JSON_WriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := toml.NewConfig(toml.Option{BaseDir: tmpDir})
+	require.NoError(t, err)
+	configProvider := toml.NewProvider(cfg)
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+	repos := repositories.NewRepositories(configProvider, logger)
+	uc := NewConfig(configProvider, repos, mock.NewMockEditor(), logger)
+
+	// A closed stdout makes the JSON encoder fail.
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	r.Close()
+	w.Close()
+	os.Stdout = w
+	showErr := uc.Show(true)
+	os.Stdout = oldStdout
+
+	require.Error(t, showErr)
 }

@@ -3,9 +3,11 @@ package config
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/hirotoni/memov2/internal/common"
 )
 
-func (uc config) Show(asJSON bool) {
+func (uc config) Show(asJSON bool) error {
 	if asJSON {
 		dto := configDTO{
 			BaseDir:         uc.config.BaseDir(),
@@ -15,16 +17,17 @@ func (uc config) Show(asJSON bool) {
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		// Errors here are unexpected (encoding a plain struct to stdout); log to
-		// stderr to keep stdout clean for the JSON consumer.
+		// Return encode errors (e.g. a closed stdout) so the command exits
+		// non-zero instead of silently reporting success to a JSON consumer.
 		if err := enc.Encode(dto); err != nil {
-			uc.logger.Error("failed to encode config", "error", err)
+			return common.Wrap(err, common.ErrorTypeService, "failed to encode config")
 		}
-		return
+		return nil
 	}
 
 	uc.logger.Info("Configuration", "base_dir", uc.config.BaseDir())
 	uc.logger.Info("Configuration", "todos_dir", uc.config.TodosDir())
 	uc.logger.Info("Configuration", "memos_dir", uc.config.MemosDir())
 	uc.logger.Info("Configuration", "todos_daystoseek", uc.config.TodosDaysToSeek())
+	return nil
 }

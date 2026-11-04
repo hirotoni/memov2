@@ -13,18 +13,14 @@ var indexCmd = &cobra.Command{
 	Use:   "index",
 	Short: "generate memo index file",
 	Long:  `generate a memo index file that lists all memos.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with the error on stderr.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-
-		err = ap.Services().Memo().GenerateMemoIndex()
-		if err != nil {
-			cmd.PrintErrf("Error generating memo file: %v\n", err)
-			return
-		}
+		return ap.Services().Memo().GenerateMemoIndex()
 	},
 }
 
