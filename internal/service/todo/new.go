@@ -111,32 +111,26 @@ func (uc todo) inheritTodos(today time.Time, daysToSeek int) (domain.TodoFileInt
 	return f, nil
 }
 
+// findPrevTodosFile returns the most recent daily todo file within the previous
+// daysToSeek days. When none exists in that window (first run, or after a long
+// break) it returns (nil, nil) so today's file is built from the template alone.
 func (uc todo) findPrevTodosFile(today time.Time, daysToSeek int) (domain.TodoFileInterface, error) {
 	repo := uc.r.Todo()
 
-	var found domain.TodoFileInterface
 	for i := range daysToSeek {
 		prevDay := today.AddDate(0, 0, -1*(i+1))
 		md, err := repo.FindTodosFileByDate(prevDay)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				if i+1 == daysToSeek {
-					return nil, common.New(common.ErrorTypeValidation, fmt.Sprintf("previous todos were not found in previous %d days", daysToSeek))
-				}
 				continue
 			}
 			return nil, common.Wrap(err, common.ErrorTypeService, "error finding previous todos file")
 		}
 
 		if md != nil {
-			found = md
-			break
+			return md, nil
 		}
 	}
 
-	if found == nil {
-		return nil, nil
-	}
-
-	return found, nil
+	return nil, nil
 }

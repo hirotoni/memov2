@@ -61,8 +61,8 @@ func newTestTodoServiceE(t *testing.T) (interfaces.TodoService, string, string, 
 }
 
 // seedTodoFile writes a daily todo file for the given date directly into todosDir,
-// with a todos heading carrying the given content. It is used to satisfy the
-// inheritance requirement of GenerateTodoFile* (which needs a previous file).
+// with a todos heading carrying the given content. It is used to exercise
+// inheritance from a previous day's file in GenerateTodoFile*.
 func seedTodoFile(t *testing.T, todosDir string, date time.Time, todosContent string) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -72,6 +72,20 @@ func seedTodoFile(t *testing.T, todosDir string, date time.Time, todosContent st
 	f.SetHeadingBlocks([]*markdown.HeadingBlock{
 		{HeadingText: utils.HeadingTodos.Text, ContentText: todosContent, Level: 2},
 		{HeadingText: utils.HeadingBacklog.Text, Level: 2},
+	})
+	require.NoError(t, r.Save(f, true))
+}
+
+// seedTodoFileWithBacklog is like seedTodoFile but also fills the backlog heading.
+func seedTodoFileWithBacklog(t *testing.T, todosDir string, date time.Time, todosContent, backlogContent string) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	r := todoRepo.NewTodo(todosDir, logger)
+	f, err := domain.NewTodosFile(date)
+	require.NoError(t, err)
+	f.SetHeadingBlocks([]*markdown.HeadingBlock{
+		{HeadingText: utils.HeadingTodos.Text, ContentText: todosContent, Level: 2},
+		{HeadingText: utils.HeadingBacklog.Text, ContentText: backlogContent, Level: 2},
 	})
 	require.NoError(t, r.Save(f, true))
 }
