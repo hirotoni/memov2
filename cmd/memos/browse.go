@@ -13,17 +13,14 @@ var browseCmd = &cobra.Command{
 	Use:   "browse",
 	Short: "browse memos in a terminal UI",
 	Long:  `Browse memos in an interactive terminal UI where you can navigate through folders and files.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with the error on stderr.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-		err = ap.Services().Memo().Browse()
-		if err != nil {
-			cmd.PrintErrf("Error browsing memos: %v\n", err)
-			return
-		}
+		return ap.Services().Memo().Browse()
 	},
 }
 

@@ -10,18 +10,14 @@ var editCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "edit config",
 	Long:  `edit config`,
-	Run: func(cmd *cobra.Command, args []string) {
+	// RunE + SilenceUsage so a failure exits non-zero with the error on stderr.
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ap, err := app.InitializeApp(cmd)
 		if err != nil {
-			cmd.PrintErrf("Error initializing app: %v\n", err)
-			return
+			return err
 		}
-
-		err = ap.Services().Config().Edit()
-		if err != nil {
-			cmd.PrintErrf("Error editing config: %v\n", err)
-			return
-		}
+		return ap.Services().Config().Edit()
 	},
 }
 
