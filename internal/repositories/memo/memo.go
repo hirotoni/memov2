@@ -365,6 +365,8 @@ func (r *memo) Move(file interfaces.MemoFileInterface, newCategoryTree []string)
 	// Remove old file only if it's different from the new location. On a
 	// case-insensitive filesystem a case-only category change yields a
 	// different path string for the same file, which must not be removed.
+	// The directory keeps its existing casing: renaming it would also move
+	// every other memo in it.
 	if currentPath != newPath && !sameFile(currentPath, newPath) {
 		err = os.Remove(currentPath)
 		if err != nil {
@@ -435,9 +437,19 @@ func (r *memo) Rename(file interfaces.MemoFileInterface, newTitle string) error 
 	if err := r.writeRaw(mm, domain.RewriteMemoTitle(string(raw), newTitle), oldPath); err != nil {
 		return common.Wrap(err, common.ErrorTypeRepository, "failed to save renamed file")
 	}
+	if oldPath == newPath {
+		return nil
+	}
+
 	// On a case-insensitive filesystem a case-only title change yields a
-	// different path string for the same file, which must not be removed.
-	if oldPath == newPath || sameFile(oldPath, newPath) {
+	// different path string for the same file. The write above landed on the
+	// existing entry (keeping its old-cased name), so the file must not be
+	// removed; rename it directly to apply the new casing instead.
+	if sameFile(oldPath, newPath) {
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to rename file: %s", oldPath))
+		}
+		r.logger.Info("Renamed file", "from", oldPath, "to", newPath)
 		return nil
 	}
 

@@ -186,9 +186,20 @@ func TestRename_CaseOnlyChangeKeepsMemo(t *testing.T) {
 
 	// Works on both case-sensitive and case-insensitive filesystems: the memo
 	// must survive under the new name with only the H1 changed.
-	newPath := filepath.Join(dir, "work", strings.Replace(oldName, "_Orig.md", "_orig.md", 1))
+	newName := strings.Replace(oldName, "_Orig.md", "_orig.md", 1)
+	newPath := filepath.Join(dir, "work", newName)
 	want := strings.Replace(richMemoBody, "# Orig\n", "# orig\n", 1)
 	assert.Equal(t, want, readFile(t, newPath))
+
+	// The on-disk name must carry the new casing (a path lookup alone would
+	// also succeed via the old-cased entry on a case-insensitive filesystem).
+	entries, err := os.ReadDir(filepath.Join(dir, "work"))
+	require.NoError(t, err)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	assert.Equal(t, []string{newName}, names)
 }
 
 func TestMove_CaseOnlyCategoryChangeKeepsMemo(t *testing.T) {

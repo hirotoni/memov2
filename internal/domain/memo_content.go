@@ -15,7 +15,7 @@ import (
 var (
 	atxH1Regex          = regexp.MustCompile(`^ {0,3}#(?:[ \t]|$)`)
 	setextH1Underline   = regexp.MustCompile(`^ {0,3}=+[ \t]*$`)
-	frontmatterCategory = regexp.MustCompile(`^category[ \t]*:`)
+	frontmatterCategory = regexp.MustCompile(`^(?:category|"category"|'category')[ \t]*:`)
 	// A line that continues the previous key's value: indented, a
 	// zero-indent block sequence item, or the closing bracket of a
 	// multi-line flow collection.
@@ -51,7 +51,7 @@ func trimLineEnding(line string) string {
 // frontmatterBounds returns the index of the closing "---" line when lines
 // begin with a YAML frontmatter block, or -1 when there is none.
 func frontmatterBounds(lines []string) int {
-	if len(lines) == 0 || trimLineEnding(lines[0]) != "---" {
+	if len(lines) == 0 || strings.TrimPrefix(trimLineEnding(lines[0]), "\ufeff") != "---" {
 		return -1
 	}
 	for i := 1; i < len(lines); i++ {

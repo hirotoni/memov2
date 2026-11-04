@@ -44,6 +44,12 @@ func TestRewriteMemoTitle(t *testing.T) {
 			want:    "# New\n\nbody\n",
 		},
 		{
+			name:    "frontmatter after BOM",
+			content: "\ufeff---\ncategory: []\n---\n\n# Orig\n",
+			title:   "New",
+			want:    "\ufeff---\ncategory: []\n---\n\n# New\n",
+		},
+		{
 			name:    "no frontmatter",
 			content: "# Orig\n\nbody\n",
 			title:   "New",
@@ -111,6 +117,18 @@ func TestRewriteMemoCategory(t *testing.T) {
 			content: "---\r\ncategory:\r\n- old\r\n-\r\ntags: x\r\n---\r\n\r\n# T\r\n",
 			tree:    []string{"new"},
 			want:    "---\r\ncategory: [\"new\"]\r\ntags: x\r\n---\r\n\r\n# T\r\n",
+		},
+		{
+			name:    "replaces quoted category key",
+			content: "---\n\"category\": [\"old\"]\ntags: x\n---\n\n# T\n",
+			tree:    []string{"new"},
+			want:    "---\ncategory: [\"new\"]\ntags: x\n---\n\n# T\n",
+		},
+		{
+			name:    "frontmatter after BOM",
+			content: "\ufeff---\ncategory: [\"old\"]\n---\n\n# T\n",
+			tree:    []string{"new"},
+			want:    "\ufeff---\ncategory: [\"new\"]\n---\n\n# T\n",
 		},
 		{
 			name:    "adds category when key missing",
