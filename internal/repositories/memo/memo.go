@@ -500,9 +500,13 @@ func (r *memo) Duplicate(file interfaces.MemoFileInterface) (interfaces.MemoFile
 }
 
 // writeRaw writes content verbatim to the path derived from file (its
-// category location and filename), truncating any existing file. It applies
+// category location and filename), replacing any existing file. It applies
 // the same validation as Save, which it bypasses: Rename, Move and Duplicate
 // must keep the original file text instead of re-serializing the parsed model.
+//
+// The content is written to a temporary file in the target directory and
+// then renamed over the target, so rewriting a memo in place (same-path
+// Rename or Move) never leaves it truncated if the write fails midway.
 func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string) error {
 	if err := domain.ValidateCategoryTree(file.CategoryTree()); err != nil {
 		return common.Wrap(err, common.ErrorTypeValidation, "invalid category tree")
@@ -517,12 +521,32 @@ func (r *memo) writeRaw(file interfaces.MemoFileInterface, content string) error
 	}
 
 	path := filepath.Join(locationPath, file.FileName())
-	if err := platform.WriteFileStream(path, true, func(w *bufio.Writer) error {
-		_, err := w.WriteString(content)
-		return err
-	}); err != nil {
-		return err
+
+	tmp, err := os.CreateTemp(locationPath, ".memov2-*.tmp")
+	if err != nil {
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to create temp file in: %s", locationPath))
 	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to write temp file: %s", tmpPath))
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to close temp file: %s", tmpPath))
+	}
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to set permissions: %s", tmpPath))
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return common.Wrap(err, common.ErrorTypeFileSystem, fmt.Sprintf("failed to write file: %s", path))
+	}
+
 	r.logger.Info("File saved", "path", path)
 	return nil
 }

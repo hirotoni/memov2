@@ -89,6 +89,24 @@ func TestRewriteMemoCategory(t *testing.T) {
 			want:    "---\ncategory: []\ntags: x\n---\n\n# T\n",
 		},
 		{
+			name:    "replaces multi-line flow list closed at column 0",
+			content: "---\ncategory: [\n  \"old\",\n  \"deeper\"\n]\ntags: x\n---\n\n# T\n",
+			tree:    []string{"new"},
+			want:    "---\ncategory: [\"new\"]\ntags: x\n---\n\n# T\n",
+		},
+		{
+			name:    "replaces block value containing blank and comment lines",
+			content: "---\ncategory:\n  - old\n\n# note\n  - deeper\n\n# kept comment\ntags: x\n---\n\n# T\n",
+			tree:    []string{"new"},
+			want:    "---\ncategory: [\"new\"]\n\n# kept comment\ntags: x\n---\n\n# T\n",
+		},
+		{
+			name:    "block value with CRLF",
+			content: "---\r\ncategory:\r\n- old\r\n-\r\ntags: x\r\n---\r\n\r\n# T\r\n",
+			tree:    []string{"new"},
+			want:    "---\r\ncategory: [\"new\"]\r\ntags: x\r\n---\r\n\r\n# T\r\n",
+		},
+		{
 			name:    "adds category when key missing",
 			content: "---\ntags: x\n---\n\n# T\n",
 			tree:    []string{"a"},

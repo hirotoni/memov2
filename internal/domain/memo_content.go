@@ -13,10 +13,16 @@ import (
 // would drop whatever the model does not hold, so these operate on lines.
 
 var (
-	atxH1Regex           = regexp.MustCompile(`^ {0,3}#(?:[ \t]|$)`)
-	setextH1Underline    = regexp.MustCompile(`^ {0,3}=+[ \t]*$`)
-	frontmatterCategory  = regexp.MustCompile(`^category[ \t]*:`)
-	yamlContinuationLine = regexp.MustCompile(`^(?:[ \t]|-(?:[ \t]|$))`)
+	atxH1Regex          = regexp.MustCompile(`^ {0,3}#(?:[ \t]|$)`)
+	setextH1Underline   = regexp.MustCompile(`^ {0,3}=+[ \t]*$`)
+	frontmatterCategory = regexp.MustCompile(`^category[ \t]*:`)
+	// A line that continues the previous key's value: indented, a
+	// zero-indent block sequence item, or the closing bracket of a
+	// multi-line flow collection.
+	yamlContinuationLine = regexp.MustCompile(`^(?:[ \t]+\S|-(?:[ \t]|$)|[\]}])`)
+	// A blank or column-0 comment line. It belongs to the value only when a
+	// continuation line follows it.
+	yamlSkippableLine = regexp.MustCompile(`^(?:[ \t]*$|#)`)
 )
 
 // splitLines splits s after each "\n" so that strings.Join(lines, "") == s.
@@ -106,8 +112,9 @@ func RewriteMemoTitle(content string, title string) string {
 
 // RewriteMemoCategory returns content with the frontmatter `category` entry
 // replaced by the given category tree. Other frontmatter keys and the body
-// are left untouched. A block-style value (indented or "- item" lines after
-// "category:") is replaced as a whole. If the frontmatter has no category key
+// are left untouched. A multi-line value (indented lines, "- item" lines or a
+// closing "]" after "category:") is replaced as a whole; blank and comment
+// lines inside it are dropped with it, those after it are kept. If the frontmatter has no category key
 // it is added as the first key; if there is no frontmatter, one is prepended.
 func RewriteMemoCategory(content string, categoryTree []string) string {
 	lines := splitLines(content)
@@ -123,8 +130,16 @@ func RewriteMemoCategory(content string, categoryTree []string) string {
 			continue
 		}
 		j := i + 1
-		for j < end && yamlContinuationLine.MatchString(lines[j]) {
-			j++
+		for k := i + 1; k < end; k++ {
+			line := trimLineEnding(lines[k])
+			if yamlContinuationLine.MatchString(line) {
+				j = k + 1
+				continue
+			}
+			if yamlSkippableLine.MatchString(line) {
+				continue
+			}
+			break
 		}
 		out := append([]string{}, lines[:i]...)
 		out = append(out, newLine+lineEnding(lines[i]))

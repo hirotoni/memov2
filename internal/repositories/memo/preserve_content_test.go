@@ -142,6 +142,49 @@ func TestRename_RejectsInvalidTitleWithoutTouchingFile(t *testing.T) {
 	assert.Equal(t, richMemoBody, readFile(t, oldPath))
 }
 
+func TestRename_SameTitleRewritesInPlace(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+	path := filepath.Join(dir, m.Location(), m.FileName())
+
+	require.NoError(t, repo.Rename(m, "Orig"))
+
+	assert.Equal(t, richMemoBody, readFile(t, path))
+	assertNoTempFiles(t, filepath.Dir(path))
+}
+
+func TestMove_SameLocationKeepsContent(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+	path := filepath.Join(dir, m.Location(), m.FileName())
+
+	require.NoError(t, repo.Move(m, []string{"work"}))
+
+	assert.Equal(t, richMemoBody, readFile(t, path))
+	assertNoTempFiles(t, filepath.Dir(path))
+}
+
+func TestMove_InvalidCategoryLeavesFileUntouched(t *testing.T) {
+	dir := t.TempDir()
+	repo := newQuietRepo(dir)
+	m := writeRichMemo(t, dir)
+	path := filepath.Join(dir, m.Location(), m.FileName())
+
+	assert.Error(t, repo.Move(m, []string{"..", "escape"}))
+	assert.Equal(t, richMemoBody, readFile(t, path))
+}
+
+func assertNoTempFiles(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.False(t, strings.HasSuffix(e.Name(), ".tmp"), "temp file left behind: %s", e.Name())
+	}
+}
+
 // movedRef points at a memo by its original filename under another category.
 type movedRef struct {
 	domain.MemoFileInterface
